@@ -1,2 +1,4 @@
 train_data_pickle
 dataset
+*.chk
+*.chk.meta
