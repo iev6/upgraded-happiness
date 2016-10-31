@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 from sklearn.cross_validation import train_test_split
+from sklearn.decomposition import MiniBatchSparsePCA,PCA
 RANDOM_SEED = 42
 tf.set_random_seed(RANDOM_SEED)
 
@@ -25,13 +26,18 @@ def model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden): # this network is the
 
 
 ''' Splitting data'''
-with open('train_data_pickle', mode='rb') as f:
+with open('./dataset/train_data_pickle', mode='rb') as f:
     trainf = pkl.load(f)
 trainf = pd.DataFrame.as_matrix(trainf)
 labels = np.int32(trainf[:,-1])
 no_of_classes = 12
-N = trainf.shape[0]
-M = trainf.shape[1]-1 #last col was label
+
+pca = PCA(n_components=200)
+trainf1 = pca.fit_transform(trainf[:,:-1]) #in memory computation
+
+
+N = trainf1.shape[0]
+M = trainf1.shape[1] #last col was label
 
 labels_OH  = np.zeros([N,no_of_classes])
 labels_OH[np.arange(N),labels] = 1
@@ -40,16 +46,22 @@ labels_OH[np.arange(N),labels] = 1
 train = np.ones([N,M+1])
 train[:,1:] = trainf[:,:-1] #preprending the column of ones
 
+#NOTE for using sparse_softmax_cross_entropy_with_logits, input should be labels and not labels_OH
+# uncomment accordingly
+
+#trX,teX,trY,teY = train_test_split(train,labels_OH,test_size=0.40,random_state=RANDOM_SEED)
 trX,teX,trY,teY = train_test_split(train,labels_OH,test_size=0.40,random_state=RANDOM_SEED)
 
 x_size = trX.shape[1]
 y_size = trY.shape[1]
+#y_size = 1
 x = tf.placeholder(tf.float32,shape=[None,x_size])
 y_ = tf.placeholder(tf.float32,shape=[None,y_size]) #one hot prediction
+#y_ = tf.placeholder(tf.int32,shape=[None]) #label
 
 #init weights of layers, w_h1 = hidden1, w_h2 = hidden2 and w_o = output
-w_h1_size = 1000
-w_h2_size = 500
+w_h1_size = 100
+w_h2_size = 50
 w_h1 = init_weights([x_size, w_h1_size])
 w_h2 = init_weights([w_h1_size, w_h2_size])
 w_o = init_weights([w_h2_size, y_size])
@@ -60,26 +72,32 @@ p_keep_hidden = tf.placeholder(tf.float32)
 
 py_x = model(x, w_h1, w_h2, w_o, p_keep_input, p_keep_hidden)
 cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x,y_))
+#cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(py_x,y_))
 train_op = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)
+#train_op = tf.train.AdadeltaOptimizer(learning_rate=0.001, rho=0.95, epsilon=1e-08).minimize(cost)
 predict_op = tf.argmax(py_x, 1)
 
-MAX_ITER = 1000
+#k=0 #when using sparse_softmax_cross_entropy_with_logits
+k=1  when running one hot label
+MAX_ITER = 500
 
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
-start_time = dt.now()
+start_time = dt.datetime.now()
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     # you need to initialize all variables
     tf.initialize_all_variables().run()
     for i in xrange(MAX_ITER):
-        for start, end in zip(range(0, len(trX), 128), range(128, len(trX)+1, 128)):
+        for start, end in zip(range(0, len(trX), 256), range(256, len(trX)+1, 256)):
             sess.run(train_op, feed_dict={x: trX[start:end], y_: trY[start:end],
-                                          p_keep_input: 0.8, p_keep_hidden: 0.5})
+                                          p_keep_input: 1.0, p_keep_hidden: 0.8})
         if i%500==0:
             saver = tf.train.Saver([w_h1,w_h2,w_o])
             saver.save(sess, 'checkpoint_'+str(i)+'.chk')
         #for prediction dropout rate should be set to 0, ie keep rate to 1
-        print(i, np.mean(np.argmax(teY, axis=1) ==
+        #
+        print(i, np.mean(np.argmax(teY, axis=k) ==
                          sess.run(predict_op, feed_dict={x: teX, y_: teY,
                                                          p_keep_input: 1.0,
                                                          p_keep_hidden: 1.0})))
+        print(i,np.mean(np.argmax(trY,axis=k)==sess.run(predict_op,feed_dict={x:trX,y_:trY,p_keep_input:1.0,p_keep_hidden:1.0})))
 print "\n time taken "+str(dt.now()-start_time)
