@@ -14,7 +14,7 @@ RANDOM_SEED = 42
 tf.set_random_seed(RANDOM_SEED)
 
 def init_weights(shape):
-    #implement Xavier initialization
+    #TODO implement Xavier initialization
     return tf.Variable(tf.truncated_normal(shape, stddev=0.01))
 
 
