@@ -9,7 +9,9 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 from sklearn.cross_validation import train_test_split
-from sklearn.decomposition import MiniBatchSparsePCA,PCA
+from sklearn.decomposition import MiniBatchSparsePCA,PCA,IncrementalPCA
+import matplotlib.pyplot as plt
+
 RANDOM_SEED = 42
 tf.set_random_seed(RANDOM_SEED)
 
@@ -18,15 +20,13 @@ def init_weights(shape):
     return tf.Variable(tf.truncated_normal(shape, stddev=0.01))
 
 
-def model(X, w_h, w_h2,w_h3, w_o, p_keep_input, p_keep_hidden): # this network is the same as the previous one except with an extra hidden layer + dropout
+def model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden): # this network is the same as the previous one except with an extra hidden layer + dropout
     X = tf.nn.dropout(X, p_keep_input)
     h = tf.nn.relu(tf.matmul(X, w_h))
     h = tf.nn.dropout(h, p_keep_hidden)
     h2 = tf.nn.relu(tf.matmul(h, w_h2))
     h2 = tf.nn.dropout(h2, p_keep_hidden)
-    h3 = tf.nn.relu(tf.matmul(h2,w_h3))
-    h3 = tf.nn.dropout(h3,p_keep_hidden)
-    return tf.matmul(h3, w_o)
+    return tf.matmul(h2, w_o)
 
 
 ''' Splitting data'''
@@ -36,25 +36,25 @@ trainf = pd.DataFrame.as_matrix(trainf)
 labels = np.int32(trainf[:,-1])
 no_of_classes = 12
 
-pca = PCA(n_components=200)
-trainf1 = pca.fit_transform(trainf[:,:-1]) #in memory computation
-trainf1 = trainf
+ipca = IncrementalPCA(n_components=200,batch_size=50)
+trainf1 = ipca.fit_transform(trainf[:,:-1]) #in memory computation
+#trainf1 = trainf
 
-N = trainf.shape[0]
-M = trainf.shape[1] #last col was label
+N = trainf1.shape[0]
+M = trainf1.shape[1] #last col was label
 
 labels_OH  = np.zeros([N,no_of_classes])
 labels_OH[np.arange(N),labels] = 1
 
 #adding a bias column
 train = np.ones([N,M])
-train[:,1:] = trainf[:,:-1] #preprending the column of ones
+train[:,1:] = trainf1[:,:-1] #preprending the column of ones
 
 #NOTE for using sparse_softmax_cross_entropy_with_logits, input should be labels and not labels_OH
 # uncomment accordingly
 
 #trX,teX,trY,teY = train_test_split(train,labels_OH,test_size=0.40,random_state=RANDOM_SEED)
-trX,teX,trY,teY = train_test_split(train,labels_OH,test_size=0.40,random_state=RANDOM_SEED)
+trX,teX,trY,teY = train_test_split(train,labels_OH,test_size=0.20,random_state=RANDOM_SEED)
 
 x_size = trX.shape[1]
 y_size = trY.shape[1]
@@ -66,11 +66,11 @@ y_ = tf.placeholder(tf.float32,shape=[None,y_size]) #one hot prediction
 #init weights of layers, w_h1 = hidden1, w_h2 = hidden2 and w_o = output
 w_h1_size = 300
 w_h2_size = 100
-w_h3_size = 12
+#w_h3_size = 12
 w_h1 = init_weights([x_size, w_h1_size])
 w_h2 = init_weights([w_h1_size, w_h2_size])
-w_h3 = init_weights([w_h2_size,w_h3_size])
-w_o = init_weights([w_h3_size, y_size])
+#w_h3 = init_weights([w_h2_size,w_h3_size])
+w_o = init_weights([w_h2_size, y_size])
 
 #dropout params NOTE : DROPOUT WILL NOT BE PERFORMED ON THE FINAL OUTPUT LAYER!
 p_keep_input = tf.placeholder(tf.float32)
@@ -79,7 +79,7 @@ p_keep_hidden = tf.placeholder(tf.float32)
 #learning_rate
 global_step = tf.Variable(0, trainable=False)
 lr = tf.train.exponential_decay(0.01,global_step=global_step,decay_rate=0.9,decay_steps=250,staircase=True)
-py_x = model(x, w_h1, w_h2,w_h3, w_o, p_keep_input, p_keep_hidden)
+py_x = model(x, w_h1, w_h2, w_o, p_keep_input, p_keep_hidden)
 cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x,y_))
 #cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(py_x,y_))
 #train_op = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)
