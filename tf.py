@@ -10,6 +10,7 @@ import pandas as pd
 import datetime as dt
 from sklearn.cross_validation import train_test_split
 from sklearn.decomposition import MiniBatchSparsePCA,PCA,IncrementalPCA
+from sklearn.externals import joblib
 import matplotlib.pyplot as plt
 
 RANDOM_SEED = 42
@@ -36,9 +37,9 @@ trainf = pd.DataFrame.as_matrix(trainf)
 labels = np.int32(trainf[:,-1])
 no_of_classes = 12
 
-ipca = IncrementalPCA(n_components=200,batch_size=50)
+ipca = IncrementalPCA(n_components=500,batch_size=1000)
 trainf1 = ipca.fit_transform(trainf[:,:-1]) #in memory computation
-#trainf1 = trainf
+#trainf1 = trainf[:,:-1]
 
 N = trainf1.shape[0]
 M = trainf1.shape[1] #last col was label
@@ -47,14 +48,14 @@ labels_OH  = np.zeros([N,no_of_classes])
 labels_OH[np.arange(N),labels] = 1
 
 #adding a bias column
-train = np.ones([N,M])
-train[:,1:] = trainf1[:,:-1] #preprending the column of ones
+train = np.ones([N,M+1])
+train[:,1:] = trainf1[:,:] #preprending the column of ones
 
 #NOTE for using sparse_softmax_cross_entropy_with_logits, input should be labels and not labels_OH
 # uncomment accordingly
 
 #trX,teX,trY,teY = train_test_split(train,labels_OH,test_size=0.40,random_state=RANDOM_SEED)
-trX,teX,trY,teY = train_test_split(train,labels_OH,test_size=0.20,random_state=RANDOM_SEED)
+trX,teX,trY,teY = train_test_split(train,labels_OH,test_size=0.30,random_state=RANDOM_SEED)
 
 x_size = trX.shape[1]
 y_size = trY.shape[1]
