@@ -75,4 +75,4 @@ restorer.restore(sess,'checkpoint_'+str(ite)+'.chk')
 
 
 lbf_lbl=sess.run(predict_op, feed_dict={x: lbf_tf,p_keep_input: 1.0,p_keep_hidden: 1.0})
-np.savetxt()
+np.savetxt('lbd.txt',lbf_lbl,fmt='%d')
