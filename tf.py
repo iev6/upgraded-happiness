@@ -21,13 +21,15 @@ def init_weights(shape):
     return tf.Variable(tf.truncated_normal(shape, stddev=0.01))
 
 
-def model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden): # this network is the same as the previous one except with an extra hidden layer + dropout
+def model(X, w_h, w_h2,w_h3, w_o, p_keep_input, p_keep_hidden): # this network is the same as the previous one except with an extra hidden layer + dropout
     X = tf.nn.dropout(X, p_keep_input)
-    h = tf.nn.relu(tf.matmul(X, w_h))
+    h = tf.nn.elu(tf.matmul(X, w_h))
     h = tf.nn.dropout(h, p_keep_hidden)
-    h2 = tf.nn.relu(tf.matmul(h, w_h2))
+    h2 = tf.nn.elu(tf.matmul(h, w_h2))
     h2 = tf.nn.dropout(h2, p_keep_hidden)
-    return tf.matmul(h2, w_o)
+    h3 = tf.nn.elu(tf.matmul(h2, w_h3))
+    h3 = tf.nn.dropout(h3, p_keep_hidden)
+    return tf.matmul(h3, w_o)
 
 
 ''' Splitting data'''
@@ -65,13 +67,13 @@ y_ = tf.placeholder(tf.float32,shape=[None,y_size]) #one hot prediction
 #y_ = tf.placeholder(tf.int32,shape=[None]) #label
 
 #init weights of layers, w_h1 = hidden1, w_h2 = hidden2 and w_o = output
-w_h1_size = 300
-w_h2_size = 100
-#w_h3_size = 12
+w_h1_size = 1000
+w_h2_size = 200
+w_h3_size = 50
 w_h1 = init_weights([x_size, w_h1_size])
 w_h2 = init_weights([w_h1_size, w_h2_size])
-#w_h3 = init_weights([w_h2_size,w_h3_size])
-w_o = init_weights([w_h2_size, y_size])
+w_h3 = init_weights([w_h2_size,w_h3_size])
+w_o = init_weights([w_h3_size, y_size])
 
 #dropout params NOTE : DROPOUT WILL NOT BE PERFORMED ON THE FINAL OUTPUT LAYER!
 p_keep_input = tf.placeholder(tf.float32)
@@ -80,19 +82,20 @@ p_keep_hidden = tf.placeholder(tf.float32)
 #learning_rate
 global_step = tf.Variable(0, trainable=False)
 lr = tf.train.exponential_decay(0.01,global_step=global_step,decay_rate=0.9,decay_steps=250,staircase=True)
-py_x = model(x, w_h1, w_h2, w_o, p_keep_input, p_keep_hidden)
+py_x = model(x, w_h1, w_h2,w_h3, w_o, p_keep_input, p_keep_hidden)
 cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x,y_))
 #cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(py_x,y_))
 #train_op = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)
-train_op = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-5,use_locking=False, name='Adam').minimize(cost,global_step=global_step)
+train_op = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8,use_locking=False, name='Adam').minimize(cost,global_step=global_step)
 predict_op = tf.argmax(py_x, 1)
 
 #k=0 #when using sparse_softmax_cross_entropy_with_logits
 k=1  #when running one hot label
-MAX_ITER = 801
+MAX_ITER = 400
 
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
 start_time = dt.datetime.now()
+
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     # you need to initialize all variables
     tf.initialize_all_variables().run()
@@ -101,11 +104,11 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     # iter = 400
     # restorer.restore(sess,'checkpoint_'+str(iter)+'.chk')
     for i in xrange(MAX_ITER):
-        for start, end in zip(range(0, len(trX), 128), range(128, len(trX)+1, 128)):
+        for start, end in zip(range(0, len(trX), 256), range(256, len(trX)+1, 256)):
             sess.run(train_op, feed_dict={x: trX[start:end], y_: trY[start:end],
-                                          p_keep_input: 0.8, p_keep_hidden: 0.6})
+                                          p_keep_input: 0.8, p_keep_hidden: 0.5})
         if i%100==0:
-            saver = tf.train.Saver([w_h1,w_h2,w_o])
+            saver = tf.train.Saver([w_h1,w_h2,w_h3,w_o])
             saver.save(sess, 'checkpoint_'+str(i)+'.chk')
         #for prediction dropout rate should be set to 0, ie keep rate to 1
         #
