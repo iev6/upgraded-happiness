@@ -19,7 +19,7 @@ tf.set_random_seed(RANDOM_SEED)
 
 def init_weights(shape):
     #TODO implement Xavier initialization
-    return tf.Variable(tf.truncated_normal(shape, stddev=0.01))
+    return tf.Variable(tf.truncated_normal(shape, stddev=0.05))
 
 
 def model(X, w_h, w_h2, w_o, p_keep_input, p_keep_hidden): # this network is the same as the previous one except with an extra hidden layer + dropout
@@ -41,6 +41,7 @@ with open('./ipca_model.pkl',mode = 'rb') as f:
     ipca = pkl.load(f)
 
 lbf_tf = ipca.transform(lbf)
+#lbf_tf = lbf
 lbf_temp = np.ones([N,lbf_tf.shape[1]+1])
 lbf_temp[:,1:] = lbf_tf
 lbf_tf = lbf_temp
@@ -48,7 +49,7 @@ lbf_tf = lbf_temp
 #now we feed this to the neural net
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
 sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
-ite = 300;
+ite = 500;
 
 x_size = lbf_tf.shape[1]
 y_size = no_of_classes
@@ -56,8 +57,8 @@ y_size = no_of_classes
 x = tf.placeholder(tf.float32,shape=[None,x_size])
 y_ = tf.placeholder(tf.float32,shape=[None,y_size])
 
-w_h1_size = 100
-w_h2_size = 50
+w_h1_size = 1024
+w_h2_size = 200
 #w_h3_size = 12
 w_h1 = init_weights([x_size, w_h1_size])
 w_h2 = init_weights([w_h1_size, w_h2_size])
@@ -69,13 +70,13 @@ p_keep_hidden = tf.placeholder(tf.float32)
 py_x = model(x, w_h1, w_h2, w_o, p_keep_input, p_keep_hidden)
 predict_op = tf.argmax(py_x, 1)
 
-restorer = tf.train.Saver([w_h1,w_h2,w_h3,w_o])
-restorer.restore(sess,'checkpoint_'+str(ite)+'.chk')
+restorer = tf.train.Saver([w1_h1,w1_h2,w1_o,w2_h1,w2_h2,w2_o,alpha])
+restorer.restore(sess,'./checkpoints/checkpoint_'+str(ite)+'.chk')
 #now session has all variables
 
 
 lbf_lbl=sess.run(predict_op, feed_dict={x: lbf_tf,p_keep_input: 1.0,p_keep_hidden: 1.0})
-np.savetxt('lbd.txt',lbf_lbl,fmt='%d')
+np.savetxt('lbd6.txt',lbf_lbl,fmt='%d')
 
 #Visualization
 ind = np.arange(1000)
