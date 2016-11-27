@@ -41,7 +41,7 @@ with open('./ipca_model.pkl',mode = 'rb') as f:
     ipca = pkl.load(f)
 
 lbf_tf = ipca.transform(lbf)
-#lbf_tf = lbf
+lbf_tf = lbf
 lbf_temp = np.ones([N,lbf_tf.shape[1]+1])
 lbf_temp[:,1:] = lbf_tf
 lbf_tf = lbf_temp
